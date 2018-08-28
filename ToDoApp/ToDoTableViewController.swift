@@ -8,7 +8,7 @@
 
 import UIKit
 
-class ToDoTableViewController: UITableViewController {
+class ToDoTableViewController: UITableViewController, ToDoCellDelegate {
     
     var todoItems: [ToDoItem]!
 
@@ -60,6 +60,41 @@ class ToDoTableViewController: UITableViewController {
         
     }
     
+    //MARK: - Table View Cell delegate methods
+    
+    func didRequestDelete(_ cell: ToDoTableViewCell) {
+
+        //get the indexPath of the cell that was clicked
+        if let indexPath = tableView.indexPath(for: cell) {
+            //delete from the document directory, delete from the array of todo items, delete from the table view
+            todoItems[indexPath.row].deleteItem()
+            todoItems.remove(at: indexPath.row)
+            tableView.deleteRows(at: [indexPath], with: .automatic)
+        }
+    }
+    
+    func didRequestComplete(_ cell: ToDoTableViewCell) {
+        
+        //get the indexPath
+        if let indexPath = tableView.indexPath(for: cell) {
+            //access the item in the array
+            var todoItem = todoItems[indexPath.row]
+            //mark the item as completed
+            todoItem.markAsCompleted()
+            
+            //create visual representation of completed text
+            cell.toDoLabel.attributedText = strikeThroughText(todoItem.title)
+        }
+    }
+    
+    //MARK: - Customized text
+    func strikeThroughText (_ text: String) -> NSAttributedString {
+        let attributedString: NSMutableAttributedString = NSMutableAttributedString(string: text)
+        //strike through effect, from the beginning to the end of the string
+        attributedString.addAttribute(NSAttributedStringKey.strikethroughStyle, value: 1, range: NSMakeRange(0, attributedString.length))
+        
+        return attributedString
+    }
     
     // MARK: - Table view data source
 
@@ -76,10 +111,18 @@ class ToDoTableViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath) as! ToDoTableViewCell
+        
+        //for our delegate to work, i.e., to access our delegate methods
+        cell.delegate = self
 
         let todoItem = todoItems[indexPath.row]
         
         cell.toDoLabel.text = todoItem.title
+        
+        //load the customized text as we load up the view
+        if todoItem.completed {
+            cell.toDoLabel.attributedText = strikeThroughText(todoItem.title)
+        }
 
         return cell
     }
