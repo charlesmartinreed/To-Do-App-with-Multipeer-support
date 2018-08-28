@@ -62,8 +62,54 @@ public class DataManager {
     }
     
     // Load the data from a file
+    static func loadData (_ fileName: String) -> Data? {
+        let url = getDocumentDirectory().appendingPathComponent(fileName, isDirectory: false)
+        
+        //does the file exist?
+        if !FileManager.default.fileExists(atPath: url.path) {
+            fatalError("File not found at path: \(url.path)")
+        }
+        
+        //grab the data object and return it
+        if let data = FileManager.default.contents(atPath: url.path) {
+           return data
+        } else {
+            fatalError("Data unavailable at path: \(url.path)")
+        }
+    }
     
-    // Load all files from a directory
+    // Load all files from a directory - loadData just loads ONE file
+    static func loadAll <T: Decodable> (_ type: T.Type) -> [T] {
+        do {
+            //grab the files in our document directory
+            let files = try FileManager.default.contentsOfDirectory(atPath: getDocumentDirectory().path)
+            
+            //this array will hold our values pulled from document directory
+            var modelObjects = [T]()
+            
+            //iterate over the files array and use the results to add the objects to the modelObjects array
+            for fileName in files {
+                modelObjects.append(load(fileName, with: type))
+            }
+            
+            return modelObjects
+        } catch {
+            fatalError("Could not load any files")
+        }
+    }
+    
     
     //Delete a file
+    static func delete (_ fileName: String) {
+        let url = getDocumentDirectory().appendingPathComponent(fileName, isDirectory: false)
+        
+        //check whether or not the file exists in the documentary
+        if FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                fatalError(error.localizedDescription)
+            }
+        }
+    }
 }

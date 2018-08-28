@@ -17,14 +17,16 @@ struct ToDoItem: Codable {
     var itemIdentifier: UUID
     
     func saveItem() {
-        
+        DataManager.save(self, with: itemIdentifier.uuidString)
     }
     
     func deleteItem() {
-        
+        DataManager.delete(itemIdentifier.uuidString)
     }
     
-    func markAsCompleted() {
-        
+    //mutating because it alters the struct itself
+    mutating func markAsCompleted() {
+        self.completed = true
+        DataManager.save(self, with: itemIdentifier.uuidString)
     }
 }
