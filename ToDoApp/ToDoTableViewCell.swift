@@ -13,6 +13,7 @@ protocol ToDoCellDelegate {
     //must integrate these functions to conform
     func didRequestDelete (_ cell:ToDoTableViewCell)
     func didRequestComplete (_ cell:ToDoTableViewCell)
+    func didRequestShare (_ cell:ToDoTableViewCell)
 }
 
 class ToDoTableViewCell: UITableViewCell {
@@ -48,4 +49,11 @@ class ToDoTableViewCell: UITableViewCell {
         
     }
     
+    @IBAction func shareToDo(_ sender: Any) {
+        //check for delegate
+        if let delegateObject = self.delegate {
+            delegateObject.didRequestShare(self)
+        }
+        
+    }
 }

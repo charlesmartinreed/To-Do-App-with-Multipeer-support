@@ -7,14 +7,21 @@
 //
 
 import UIKit
+import MultipeerConnectivity //can use bluetooth or wifi to share info between devices
 
-class ToDoTableViewController: UITableViewController, ToDoCellDelegate {
-    
+class ToDoTableViewController: UITableViewController, ToDoCellDelegate, MCSessionDelegate, MCBrowserViewControllerDelegate {
+
+    //MARK:- PROPERTIES
     var todoItems: [ToDoItem]!
+    
+    var peerID: MCPeerID!
+    var mcSession: MCSession!
+    var mcAdvertiserAssistant: MCAdvertiserAssistant!
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        setupConnectivity()
         loadData()
     }
 
@@ -25,10 +32,8 @@ class ToDoTableViewController: UITableViewController, ToDoCellDelegate {
             $0.createdAt < $1.createdAt
         })
         tableView.reloadData()
-        
-
-        
     }
+    
     @IBAction func addNewTodo(_ sender: Any) {
         
         //present an alert with a text field
@@ -60,6 +65,97 @@ class ToDoTableViewController: UITableViewController, ToDoCellDelegate {
         
     }
     
+    //MARK:- Multipeer connectivity - MC delegate functions
+    
+    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        //using a switch over the state, display the status of the connection and the displayName for the peer involved in the connection attempt
+        switch state {
+        case MCSessionState.connected:
+            print("Connected: \(peerID.displayName)")
+        case MCSessionState.connecting:
+            print("Connecting to: \(peerID.displayName)")
+        case MCSessionState.notConnected:
+            print("Not Connected to: \(peerID.displayName)")
+        }
+    }
+    
+    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        //create a to-do item from the received data
+        do {
+            let todoItem = try JSONDecoder().decode(ToDoItem.self, from: data)
+            //use data manager to save received item to disk
+            DataManager.save(todoItem, with: todoItem.itemIdentifier.uuidString)
+            
+            DispatchQueue.main.async {
+                [unowned self] in self.loadData()
+            }
+        } catch {
+            fatalError("Unable to process the received data")
+        }
+    }
+    
+    func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
+        //do
+    }
+    
+    func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
+        //do
+    }
+    
+    func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
+        //do
+    }
+    
+    func browserViewControllerDidFinish(_ browserViewController: MCBrowserViewController) {
+        //dismiss the browser vc
+        dismiss(animated: true, completion: nil)
+    }
+    
+    func browserViewControllerWasCancelled(_ browserViewController: MCBrowserViewController) {
+        dismiss(animated: true, completion: nil)
+    }
+
+    func setupConnectivity() {
+        //create a peer ID - could be any string, but device name is good practice
+        peerID = MCPeerID(displayName: UIDevice.current.name)
+        
+        //set up the session
+        mcSession = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
+        
+        //set the delegate
+        mcSession.delegate = self
+    }
+    
+    
+    @IBAction func showConnectivity(_ sender: Any) {
+        //either join or host a multipeer session
+        
+        let actionSheet = UIAlertController(title: "ToDo Exchange", message: "Do you want to Host or Join a session?", preferredStyle: .actionSheet)
+        actionSheet.addAction(UIAlertAction(title: "Host Session", style: .default, handler: { (action: UIAlertAction) in
+            //create an advert assistant and start advertising
+            self.mcAdvertiserAssistant = MCAdvertiserAssistant(serviceType: "cr-td", discoveryInfo: nil, session: self.mcSession)
+            self.mcAdvertiserAssistant.start()
+            
+            
+        }))
+        
+        actionSheet.addAction(UIAlertAction(title: "Join Session", style: .default, handler: { (action: UIAlertAction) in
+            //create a browser vc, ive it the proper service type and session defined in your advertiser and set the delegate to self
+            let mcBrowser = MCBrowserViewController(serviceType: "cr-td", session: self.mcSession)
+            mcBrowser.delegate = self
+            
+            //present the browser view controller
+            self.present(mcBrowser, animated: true, completion: nil)
+            
+            
+        }))
+        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        
+        self.present(actionSheet, animated: true, completion: nil)
+        
+    }
+    
+    
     //MARK: - Table View Cell delegate methods
     
     func didRequestDelete(_ cell: ToDoTableViewCell) {
@@ -84,6 +180,32 @@ class ToDoTableViewController: UITableViewController, ToDoCellDelegate {
             
             //create visual representation of completed text
             cell.toDoLabel.attributedText = strikeThroughText(todoItem.title)
+        }
+    }
+    
+    func didRequestShare(_ cell: ToDoTableViewCell) {
+        //get the indexPath
+        if let indexPath = tableView.indexPath(for: cell) {
+            //create a todo item from the selected row
+            var todoItem = todoItems[indexPath.row]
+            sendTodo(todoItem)
+        }
+    }
+    
+    func sendTodo (_ todoItem: ToDoItem) {
+        //check if you're connected
+        if mcSession.connectedPeers.count > 0 {
+            //try to load a todo item
+            if let todoData = DataManager.loadData(todoItem.itemIdentifier.uuidString) {
+                do {
+                    //try to reliably send the data to all connected peers in the session
+                    try mcSession.send(todoData, toPeers: mcSession.connectedPeers, with: .reliable)
+                } catch {
+                    fatalError("Could not send todo item.")
+                }
+            }
+        } else {
+            print("You're not connected to any other devices.")
         }
     }
     
